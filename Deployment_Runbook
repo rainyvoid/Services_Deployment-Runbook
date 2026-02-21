@@ -1,0 +1,164 @@
+# Infrastructure Deployment Philosophy & Engineering Standards
+
+## 1. Objective
+
+We deploy self-hosted services in containers with a balance of:
+
+- Security by design  
+- Practical operability  
+- Reproducibility  
+- Minimal long-term maintenance burden  
+
+Security is a priority, but not dogma. If a control blocks functionality, we analyze it, document it, and implement the safest acceptable workaround.
+
+---
+
+## 2. Core Principles
+
+### 2.1 Least Privilege First — Not Blindly
+
+Default stance:
+
+- No root inside containers
+- Explicit `UID:GID`
+- `cap_drop: ALL`, add back only what is required
+- `no-new-privileges:true`
+- Read-only root filesystem where feasible
+
+However:
+
+If something breaks (example: service fails under `no-new-privileges:true`), do not silently remove the restriction.
+
+Instead:
+1. Identify exactly what fails.
+2. Determine which capability or syscall is required.
+3. Evaluate risk.
+4. Apply the smallest possible exception.
+5. Document the reason and impact.
+
+Every permission must have a reason attached to it.
+
+---
+
+### 2.2 Isolation Is the Primary Security Boundary
+
+We rely on Linux kernel primitives via Docker:
+
+- Namespaces (PID, mount, network)
+- cgroups (CPU/memory limits)
+- Filesystem isolation
+
+Avoid unless justified:
+
+- `--privileged`
+- Host network mode
+- Host PID namespace
+- Broad host bind mounts
+
+If a service requires one of these:
+- Clearly document why.
+- Evaluate alternative designs.
+- Assess blast radius if compromised.
+
+The question is not “can we make it work?”
+The question is “what happens if this container is compromised?”
+
+---
+
+### 2.3 Immutable & Declarative Deployments
+
+- All services defined in `docker-compose`
+- Version pinned images (no `latest`)
+- No SSH into containers to fix issues
+- Rebuild and redeploy instead of patching live systems
+
+If the service cannot be rebuilt from zero reliably, the design is incomplete.
+
+---
+
+### 2.4 Data and Persistence
+
+- Explicit volumes only
+- Proper UID/GID ownership on host
+- Backups external to container lifecycle
+
+Containers are disposable.
+Data is not.
+
+---
+
+## 3. Engineering Expectations
+
+When deploying or modifying a service:
+
+- Ask: What minimum permissions are required?
+- Ask: What kernel boundary protects the host here?
+- Ask: What happens if this process is exploited?
+- Ask: Is the operational complexity justified?
+
+Healthy questioning is encouraged.
+
+If something feels overly restrictive:
+- Propose a change.
+- Explain why.
+- Present trade-offs.
+- Suggest safer alternatives.
+
+We prefer informed flexibility over rigid rules.
+
+---
+
+## 4. Handling Roadblocks
+
+When a security control blocks functionality:
+
+1. Do not remove it immediately.
+2. Identify the technical root cause.
+3. Determine the smallest viable change.
+4. Document:
+   - What failed
+   - Why it failed
+   - What was changed
+   - What risk was introduced
+   - Why it is acceptable
+
+Example scenarios:
+- Service requires additional Linux capability.
+- Service fails under read-only root filesystem.
+- Service requires host networking for protocol reasons.
+
+Each exception must be deliberate and recorded.
+
+---
+
+## 5. Documentation Standard
+
+For every service:
+
+- Purpose
+- Required privileges
+- Network exposure
+- Data paths
+- Update procedure
+- Rollback procedure
+- Known trade-offs
+
+If future-you cannot understand why a permission exists, the documentation failed.
+
+---
+
+## 6. Culture & Mindset
+
+We build systems that:
+
+- Can be rebuilt from zero.
+- Assume compromise is possible.
+- Minimize blast radius.
+- Remain operationally simple.
+- Encourage technical curiosity and challenge.
+
+Question assumptions.
+Document decisions.
+Prefer containment over convenience — unless convenience is justified.
+
+That is the engineering standard for every service we deploy.
